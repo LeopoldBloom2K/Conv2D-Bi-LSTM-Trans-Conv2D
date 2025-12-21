@@ -9,8 +9,7 @@ venv/
 *.egg-info/
 
 # 데이터
-data/raw/*.wav
-data/raw/*.mp3
+data/raw/
 data/processed/
 
 # 모델 체크포인트
@@ -30,9 +29,6 @@ result_*.wav
 # OS
 .DS_Store
 Thumbs.db
-
-# output
-result.wav
 
 # mlflow
 mlflow.db
