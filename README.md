@@ -98,17 +98,18 @@ python evaluate.py \
     --song_dir ./test/Test_Song_Name \
     --target vocals
 ```
+
 ## 점수 해석 가이드 (SDR Score)
 
 * 결과로 나온 dB 숫자를 보고 판단하기
 
-|SDR 점수 (dB)|평가|상태|
+| SDR 점수 (dB) | 평가 | 상태 |
 | :--- | :--- | :--- |
-|0 dB 미만 | 실패 | 분리가 전혀 안 됨 (노이즈만 가득함). 학습 오류. |
-|0 ~ 3 dB | 나쁨 | 분리는 됐지만, 다른 악기 소리가 많이 섞여 있음. |
-|3 ~ 5 dB | 보통 | 들어줄 만함. 보컬 윤곽이 뚜렷하나 배경음이 좀 들림. |
-|5 ~ 7 dB | 좋음 | 상용 앱 수준에 근접. 배경음이 거의 안 들림. (우리의 1차 목표) |
-|7 dB 이상 | 훌륭함 | SOTA(최고 수준) 모델급 성능.|
+| 0 dB 미만 | 실패 | 분리가 전혀 안 됨 (노이즈만 가득함). 학습 오류. |
+| 0 ~ 3 dB | 나쁨 | 분리는 됐지만, 다른 악기 소리가 많이 섞여 있음. |
+| 3 ~ 5 dB | 보통 | 들어줄 만함. 보컬 윤곽이 뚜렷하나 배경음이 좀 들림. |
+| 5 ~ 7 dB | 좋음 | 상용 앱 수준에 근접. 배경음이 거의 안 들림. (우리의 1차 목표) |
+| 7 dB 이상 | 훌륭함 | SOTA(최고 수준) 모델급 성능.|
 
 * 직접 들어보기 (Qualitative)
 
@@ -116,8 +117,42 @@ python evaluate.py \
 
     2. Clean: 보컬이 나올 때 드럼의 '치키치키' 소리가 섞여 들리지 않는가?
 
->SDR이 4.0 dB 이상이고, 들어봤을 때 보컬이 선명하다면? 👉 기본 학습 성공 <br>
- SDR이 너무 낮다면? 👉 파인튜닝 이전에 기본 학습을 더 오래(Epoch 추가)
+> * SDR이 4.0 dB 이상이고, 들어봤을 때 보컬이 선명하다면? 👉 기본 학습 성공
+> * SDR이 너무 낮다면? 👉 파인튜닝 이전에 기본 학습을 더 오래 (Epoch 추가)
+
+## 서로 다른 환경에서 학습한 결과 비교
+
+단순히 터미널에 찍히는 숫자가 아닌 정확도 수치를 계산하고 이를 MLFlow에 자동 평가를 함
+
+* Reference: 정답 보컬 파일 (Target)
+* Estimate A: 데스크탑에서 분리한 결과
+* Estimate B: 노트북에서 분리한 결과
+
+### MLFlow 설치
+
+```bash
+pip install mlflow
+```
+
+### 실행 명령어
+
+```bash
+python compare_mlflow.py --ref ".\test\TEST_SONG\vocals.wav" --a "{Estimate A_PATH} --b {Estimate B_PATH}"
+```
+
+### 결과 확인
+
+```bash
+mlflow ui
+```
+
+### 웹사이트 접속 (http://localhost:5000)
+
+* Model_Comparison : 실험한 기록 노출
+* Metrics : 누가 점수가 더 높은지 확인
+* Artifacts : 스펙트로그램 이미지 확인 `comparison_result.png`
+
+>귀로 듣는 것이 아닌 수치로 객관적인 데이터를 남길 수 있습니다.
 
 ## 모델 아키텍처
 

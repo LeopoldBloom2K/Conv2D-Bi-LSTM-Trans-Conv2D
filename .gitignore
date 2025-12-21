@@ -20,6 +20,7 @@ checkpoints/
 
 # 출력
 output/
+result_*.wav
 
 # IDE
 .vscode/
@@ -32,3 +33,7 @@ Thumbs.db
 
 # output
 result.wav
+
+# mlflow
+mlflow.db
+meta.yaml
