@@ -2,7 +2,7 @@
 
 이 프로젝트는 CRNN (Convolutional Recurrent Neural Network) 아키텍처를 기반으로 한 경량화된 음악 소스 분리(Music Source Separation) 모델입니다. 입력된 음원(Mixture)에서 보컬, 드럼 등 특정 악기 트랙을 분리해냅니다.
 
-## ✨ 핵심 기능 (Key Features)
+## 핵심 기능 (Key Features)
 
 * **Hybrid Architecture** : CNN(공간적 특징) + Bi-GRU(시간적 흐름/템포) + U-Net(Skip Connection) 결합 구조
 
@@ -12,7 +12,7 @@
 
 * **Smart Training** : Validation Loss 기반의 Early Stopping 및 Best Model 자동 저장 지원
 
-## 📂 데이터셋 (Datasets)
+## 데이터셋 (Datasets)
 
 본 모델 학습을 위해 다음과 같은 **Mix(혼합음)**, **Stems(개별 악기 트랙)** 가 포함된 데이터셋을 사용함.
 
@@ -57,7 +57,7 @@ pip install -r requirements.txt
 학습을 위해서는 **Mix(섞인 곡)**와 Target(분리할 악기) 음원 쌍이 필요합니다.</br>
 `data/train/` 폴더 아래에 곡 별로 폴더를 만들고, 그 안에 `mixture.wav`와 `vocals.wav`(타겟 악기)를 넣어주세요.
 
-# 학습
+## 학습
 
 ```bash
 # 기본 학습 (Vocals 분리)
@@ -88,6 +88,37 @@ python inference.py \
     --model_path ./checkpoints/best_model.pth
 ```
 
+## 평가 (Evaluate)
+
+* 학습된 모델이 실제로 얼마나 잘 작동하는지 **수치(Score)**와 **귀(Listening)**로 확인합니다.
+이 분야에서 가장 공신력 있는 평가지표인 **SDR (Source-to-Distortion Ratio, 신호 대 왜곡 비율)**을 계산하는 평가 코드가 추가로 필요합니다.
+
+```bash
+python evaluate.py \
+    --song_dir ./test/Test_Song_Name \
+    --target vocals
+```
+## 점수 해석 가이드 (SDR Score)
+
+* 결과로 나온 dB 숫자를 보고 판단하기
+
+|SDR 점수 (dB)|평가|상태|
+| :--- | :--- | :--- |
+|0 dB 미만 | 실패 | 분리가 전혀 안 됨 (노이즈만 가득함). 학습 오류. |
+|0 ~ 3 dB | 나쁨 | 분리는 됐지만, 다른 악기 소리가 많이 섞여 있음. |
+|3 ~ 5 dB | 보통 | 들어줄 만함. 보컬 윤곽이 뚜렷하나 배경음이 좀 들림. |
+|5 ~ 7 dB | 좋음 | 상용 앱 수준에 근접. 배경음이 거의 안 들림. (우리의 1차 목표) |
+|7 dB 이상 | 훌륭함 | SOTA(최고 수준) 모델급 성능.|
+
+* 직접 들어보기 (Qualitative)
+
+    1. Silence: 보컬이 없는 구간에서 배경음(드럼, 기타)이 조용해지는가?
+
+    2. Clean: 보컬이 나올 때 드럼의 '치키치키' 소리가 섞여 들리지 않는가?
+
+>SDR이 4.0 dB 이상이고, 들어봤을 때 보컬이 선명하다면? 👉 기본 학습 성공 <br>
+ SDR이 너무 낮다면? 👉 파인튜닝 이전에 기본 학습을 더 오래(Epoch 추가)
+
 ## 모델 아키텍처
 
 * **Encoder**: 4-layer CNN (주파수 차원 압축)
@@ -97,7 +128,7 @@ python inference.py \
 
 ## Audio Config (Optimized)
 
-가성비와 학습 속도를 위해 최적화된 설정입니다.
+메모리 최적화와 학습 속도를 위해 최적화된 설정입니다.
 
 | Parameter | Value | Description |
 | :--- | :--- | :--- |
