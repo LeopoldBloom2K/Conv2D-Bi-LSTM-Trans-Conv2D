@@ -29,3 +29,6 @@ output/
 # OS
 .DS_Store
 Thumbs.db
+
+# output
+result.wav
