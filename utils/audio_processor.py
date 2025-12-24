@@ -11,42 +11,80 @@ class AudioProcessor:
         self.n_bins = n_fft // 2 
 
     def load_audio(self, path):
-        audio, _ = librosa.load(path, sr=self.sr, mono=True)
+        """
+        스테레오(2ch)로 오디오 로드
+        Return: (2, Samples) 형태의 Numpy Array
+        """
+        # mono=False로 설정하여 스테레오 유지
+        audio, _ = librosa.load(path, sr=self.sr, mono=False)
+        
+        # 만약 원본이 모노(1ch)라면 (2, Samples)로 복제
+        if audio.ndim == 1:
+            audio = np.stack([audio, audio], axis=0)
+            
         return audio
 
     def audio_to_stft(self, audio):
         """
-        오디오 -> Magnitude(크기), Phase(위상) 분리
+        스테레오 오디오 -> Magnitude, Phase 분리
+        Input: (2, Samples)
         Return: (Magnitude Tensor, Phase Numpy)
+        - Magnitude Shape: (2, Freq, Time)
         """
-        stft = librosa.stft(audio, n_fft=self.n_fft, hop_length=self.hop_length)
+        mags = []
+        phases = []
+
+        # 채널별(Left, Right)로 루프를 돌며 STFT 수행
+        for ch in range(2):
+            stft = librosa.stft(audio[ch], n_fft=self.n_fft, hop_length=self.hop_length)
+            
+            # 마지막 주파수 빈 버리기 (1025 -> 1024)
+            stft = stft[:-1, :]
+            
+            mag = np.abs(stft)
+            phase = np.angle(stft)
+            
+            # Log-scale 변환
+            mag = np.log1p(mag)
+            
+            mags.append(mag)
+            phases.append(phase)
+            
+        # (2, Freq, Time) 형태로 쌓기
+        mag_tensor = torch.from_numpy(np.stack(mags, axis=0)).float()
+        phase_arr = np.stack(phases, axis=0)
         
-        # 마지막 주파수 빈 하나를 버려서 1024개로 맞춤 (모델의 MaxPool 크기 호환성 위함)
-        stft = stft[:-1, :] 
-        
-        mag = np.abs(stft)
-        phase = np.angle(stft)
-        
-        # Log-scale 변환 (학습 안정성)
-        mag = np.log1p(mag)
-        
-        return torch.FloatTensor(mag).unsqueeze(0), phase
+        return mag_tensor, phase_arr
 
     def stft_to_audio(self, mag, phase):
         """
-        Magnitude + Phase -> 오디오 복원
+        Magnitude + Phase -> 스테레오 오디오 복원
+        Input Mag: (2, Freq, Time) or (Batch, 2, Freq, Time)
         """
         if isinstance(mag, torch.Tensor):
-            mag = mag.detach().cpu().numpy().squeeze()
+            mag = mag.detach().cpu().numpy()
             
-        # Log-scale 역변환
-        mag = np.expm1(mag)
-        
-        # 버렸던 마지막 빈(bin) 0으로 채워서 복구
-        mag = np.pad(mag, ((0, 1), (0, 0)), mode='constant')
-        phase = np.pad(phase, ((0, 1), (0, 0)), mode='constant')
-        
-        # 복소수 재구성
-        stft = mag * np.exp(1j * phase)
-        audio = librosa.istft(stft, hop_length=self.hop_length)
-        return audio
+        # 배치 차원이 있다면 첫 번째 배치만 가져옴 (추론 시)
+        if mag.ndim == 4: 
+            mag = mag[0]
+            
+        channels = []
+        for ch in range(2):
+            # 채널별 데이터 가져오기
+            curr_mag = mag[ch]
+            curr_phase = phase[ch]
+
+            # Log-scale 역변환
+            curr_mag = np.expm1(curr_mag)
+            
+            # 버렸던 마지막 빈(bin) 복구
+            curr_mag = np.pad(curr_mag, ((0, 1), (0, 0)), mode='constant')
+            curr_phase = np.pad(curr_phase, ((0, 1), (0, 0)), mode='constant')
+            
+            # ISTFT
+            stft = curr_mag * np.exp(1j * curr_phase)
+            audio_ch = librosa.istft(stft, hop_length=self.hop_length)
+            channels.append(audio_ch)
+            
+        # (2, Samples) 형태로 결합
+        return np.stack(channels, axis=0)

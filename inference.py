@@ -1,97 +1,77 @@
 import torch
+import librosa
 import soundfile as sf
+import numpy as np
 import argparse
 import os
-import numpy as np
-from tqdm import tqdm
-from torch.amp import autocast 
 from models.crnn_separator import CRNN_Separator
-from utils.audio_processor import AudioProcessor
 
-def separate(args):
-    # 1. 디바이스 설정
-    use_cuda = torch.cuda.is_available()
-    device = torch.device('cuda' if use_cuda else 'cpu')
-    print(f"Device: {device}")
-
-    # 2. 모델 로드 (n_bins=512 필수)
+def separate_audio(args):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    os.makedirs(args.out_dir, exist_ok=True)
+    
+    print(f"Loading model from {args.model_path}...")
+    # 모델 초기화 (512 bin)
     model = CRNN_Separator(n_bins=512).to(device)
+    state_dict = torch.load(args.model_path, map_location=device)
     
-    if not os.path.exists(args.model_path):
-        print(f"Error: 모델 파일이 없습니다 -> {args.model_path}")
-        return
-
-    print(f"Loading model: {args.model_path}")
-    checkpoint = torch.load(args.model_path, map_location=device)
-    
-    if 'model_state_dict' in checkpoint:
-        model.load_state_dict(checkpoint['model_state_dict'])
+    if 'model_state_dict' in state_dict:
+        model.load_state_dict(state_dict['model_state_dict'])
     else:
-        model.load_state_dict(checkpoint)
-        
+        model.load_state_dict(state_dict)
+    
     model.eval()
-    
-    # 3. 오디오 프로세서 (학습과 동일 설정)
-    processor = AudioProcessor(sr=22050, n_fft=1024, hop_length=256)
-    
-    # 4. 오디오 로드
-    print(f"Loading audio: {args.input_path}")
-    full_audio = processor.load_audio(args.input_path)
-    
-    # --- [핵심] 청크(Chunk) 단위 처리 ---
-    # 노래를 통째로 넣으면 느리니까, 10초씩 잘라서 처리합니다.
-    chunk_seconds = 10 
-    chunk_samples = chunk_seconds * processor.sr
-    total_len = len(full_audio)
-    
-    # 결과물을 담을 빈 리스트
-    output_audio = np.zeros_like(full_audio)
-    
-    print(f"Start separating (Total length: {total_len/processor.sr:.1f}s)...")
-    
-    # 진행바 표시
-    for i in tqdm(range(0, total_len, chunk_samples)):
-        # 10초씩 자르기
-        chunk = full_audio[i : i + chunk_samples]
-        
-        # 마지막 조각이 너무 짧으면 패딩
-        pad_len = 0
-        if len(chunk) < chunk_samples:
-            pad_len = chunk_samples - len(chunk)
-            chunk = np.pad(chunk, (0, pad_len))
-            
-        # 전처리
-        mix_mag, mix_phase = processor.audio_to_stft(chunk)
-        mix_mag_tensor = mix_mag.unsqueeze(0).to(device)
-        
-        # 추론
-        with torch.no_grad():
-            with autocast(device_type='cuda', enabled=use_cuda):
-                mask = model(mix_mag_tensor)
-                pred_mag = mix_mag_tensor * mask
-        
-        # 복원
-        estimated_chunk = processor.stft_to_audio(pred_mag, mix_phase)
-        
-        # 패딩했던 부분 다시 잘라내기
-        if pad_len > 0:
-            estimated_chunk = estimated_chunk[:-pad_len]
-            
-        # 결과 저장
-        # (주의: STFT 복원 과정에서 길이가 미세하게 달라질 수 있어 길이 맞춤)
-        write_len = min(len(estimated_chunk), len(output_audio[i : i + chunk_samples]))
-        output_audio[i : i + write_len] = estimated_chunk[:write_len]
 
-    # 5. 저장
-    os.makedirs(os.path.dirname(args.output_path) or '.', exist_ok=True)
-    sf.write(args.output_path, output_audio, processor.sr)
-    print(f"\n✨ 완료! 저장됨: {args.output_path}")
+    print(f"Processing audio: {args.input_path}")
+    y, sr = librosa.load(args.input_path, sr=22050, mono=True)
+    
+    # 1. STFT 변환 (Shape: 513, Time)
+    S = librosa.stft(y, n_fft=1024, hop_length=256)
+    mag = np.abs(S)
+    phase = np.angle(S)
+    
+    # [수정 1] 모델 입력용으로 513 -> 512로 자르기 (가장 높은 주파수 제거)
+    mag_input = mag[:-1, :] 
+    
+    # 텐서 변환
+    mag_tensor = torch.tensor(mag_input, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
+
+    # 2. 추론
+    with torch.no_grad():
+        mask = model(mag_tensor)
+        mask = mask.squeeze().cpu().numpy()
+
+    # [옵션] 마스크 품질 향상 (Threshold & Scaling)
+    mask = mask ** args.mask_scale
+    mask[mask < args.threshold] = 0.0
+
+    # 3. 마스크 적용 (Shape: 512, Time)
+    est_mag_512 = mag_input * mask
+    
+    # [수정 2] iSTFT를 위해 512 -> 513으로 복구 (마지막 줄에 0 추가)
+    # np.pad(배열, ((위, 아래), (왼, 오)))
+    est_mag = np.pad(est_mag_512, ((0, 1), (0, 0)), mode='constant')
+
+    # 4. 오디오 복원
+    # 위상(phase)정보는 원본(513개)을 그대로 사용
+    est_S = est_mag * np.exp(1j * phase)
+    est_audio = librosa.istft(est_S, hop_length=256)
+
+    # 저장
+    filename = os.path.splitext(os.path.basename(args.input_path))[0]
+    out_path = os.path.join(args.out_dir, f"{filename}_{args.target}_cleaned.wav")
+    sf.write(out_path, est_audio, sr)
+    
+    print(f"✅ 완료! 저장됨: {out_path}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_path', type=str, required=True)
-    parser.add_argument('--output_path', type=str, default='result.wav')
-    parser.add_argument('--model_path', type=str, default='./checkpoints/best_model.pth')
+    parser.add_argument('--model_path', type=str, required=True)
+    parser.add_argument('--out_dir', type=str, default='./results')
+    parser.add_argument('--target', type=str, default='vocals')
+    parser.add_argument('--threshold', type=float, default=0.1)
+    parser.add_argument('--mask_scale', type=float, default=2.0)
     
     args = parser.parse_args()
-    separate(args)
+    separate_audio(args)
