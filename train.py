@@ -64,7 +64,7 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = CRNN_Separator(
         input_channels=2, 
-        n_bins=args.n_fft // 2 + 1, 
+        n_bins=args.n_fft // 2, 
         num_stems=4
     ).to(device)
     

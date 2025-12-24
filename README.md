@@ -170,7 +170,7 @@ mlflow ui
 | Sample Rate | 22,050 Hz | 11kHz 이하 정보 집중 (데이터 크기 50% 절감) |
 | N_FFT | 1024 | 주파수 해상도 |
 | Hop Length | 256 | 시간 해상도 |
-| Input Channels | 1 | Mono Audio |
+| Input Channels | 2 | Stereo Audio |
 
 ## Traing config
 

@@ -23,14 +23,13 @@ def separate_audio(args):
     SR = 22050
     N_FFT = 1024
     HOP_LENGTH = 256
-    N_BINS = N_FFT // 2 + 1  # 513
+    N_BINS = N_FFT // 2  # 512
     
     print(f"Loading model from {args.model_path}...")
     
     # 모델 초기화 (Stereo=2ch, 4 Stems)
-    # 학습 때 n_bins를 n_fft//2 + 1 (513)로 썼는지, 512로 잘라서 썼는지 확인 필요.
-    # 제공해주신 audio_processor.py는 n_fft//2 (512)를 사용하므로 n_bins=512로 설정합니다.
-    model = CRNN_Separator(input_channels=2, n_bins=512, num_stems=4).to(device)
+    # audio_processor.py는 n_fft//2 (512)를 사용하므로 n_bins=N_BINS로 설정합니다.
+    model = CRNN_Separator(input_channels=2, n_bins=N_BINS, num_stems=4).to(device)
     
     # 가중치 로드
     state_dict = torch.load(args.model_path, map_location=device)
