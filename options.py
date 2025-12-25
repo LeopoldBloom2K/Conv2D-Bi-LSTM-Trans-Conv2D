@@ -7,9 +7,9 @@ def get_args():
     # 1. 데이터 경로 설정 (SSD / HDD 분리 전략)
     # ==========================================
     parser.add_argument('--train_dir', type=str, required=True, 
-                        help='[SSD 권장] 학습 데이터 폴더 경로 (예: C:/Data/musdb18hq/train)')
+                        help='[SSD 권장] 학습 데이터 폴더 경로 (예: C:/data/<train>)')
     parser.add_argument('--val_dir', type=str, required=True, 
-                        help='[HDD 가능] 검증 데이터 폴더 경로 (예: D:/Data/musdb18hq/test)')
+                        help='[HDD 가능] 검증 데이터 폴더 경로 (예: C:/data/<val>)')
     
     # 저장 및 로깅 경로
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints', 
@@ -22,10 +22,10 @@ def get_args():
     # ==========================================
     # 2. 학습 하이퍼파라미터 (사용자 요청 반영)
     # ==========================================
-    parser.add_argument('--epochs', type=int, default=1000, 
-                        help='총 학습 반복 횟수 (기본: 1000)')
-    parser.add_argument('--patience', type=int, default=25, 
-                        help='Early Stopping 인내 횟수 (기본: 25)')
+    parser.add_argument('--epochs', type=int, default=3000, 
+                        help='총 학습 반복 횟수 (기본: 3000)')
+    parser.add_argument('--patience', type=int, default=100, 
+                        help='Early Stopping 인내 횟수 (기본: 100)')
     
     parser.add_argument('--batch_size', type=int, default=16, 
                         help='배치 사이즈 (SSD 사용 시 16 이상 권장, 메모리 부족 시 줄일 것)')

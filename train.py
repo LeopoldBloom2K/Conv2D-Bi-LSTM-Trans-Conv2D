@@ -19,6 +19,12 @@ def main():
 
     # 2. 설정 불러오기
     args = get_args()
+    timestamp = start_time.strftime('%Y%m%d_%H%M%S') # 예: 20231025_143000
+    args.exp_name = f"{args.exp_name}_{timestamp}"
+        
+    print(f"📝 실험 이름(Log Name): {args.exp_name}")
+    print(f"📂 로그 저장 경로: runs/{args.exp_name}")
+    print(f"💾 모델 저장 경로: {args.checkpoint_dir}/{args.exp_name}_best.pth")
     os.makedirs(args.checkpoint_dir, exist_ok=True)
     
     # 3. 데이터셋 준비
