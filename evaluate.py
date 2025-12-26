@@ -22,10 +22,20 @@ def evaluate_dataset(args):
     SR = 22050
     N_FFT = 1024
     HOP_LENGTH = 256
-    N_BINS = N_FFT // 2  # 512
+    N_BINS = N_FFT // 2 
     
-    # 2. 모델 로드
-    model = CRNN_Separator(input_channels=2, n_bins=N_BINS, num_stems=4).to(device)
+    print(f"Loading model from {args.model_path}...")
+    print(f"⚙️ Model Config: Hidden={args.hidden_size}, Layers={args.num_layers}")
+    
+    # 2. 모델 로드 (옵션 적용)
+    model = CRNN_Separator(
+        input_channels=2, 
+        n_bins=N_BINS, 
+        num_stems=4,
+        hidden_size=args.hidden_size,  
+        num_layers=args.num_layers     
+    ).to(device)
+    
     checkpoint = torch.load(args.model_path, map_location=device)
     
     if 'model_state_dict' in checkpoint:
@@ -37,14 +47,21 @@ def evaluate_dataset(args):
     # 3. 오디오 프로세서
     processor = AudioProcessor(sr=SR, n_fft=N_FFT, hop_length=HOP_LENGTH)
     
-    # 4. 곡 목록 확인
-    if os.path.exists(os.path.join(args.test_dir, "mixture.wav")):
-        song_folders = [args.test_dir]
+    # 4. 곡 목록 확인 (스마트 경로 인식)
+    test_path = os.path.abspath(args.test_dir)
+    
+    # [수정됨] 만약 파일 경로(예: mixture.wav)가 입력되면, 그 파일이 있는 폴더 경로로 자동 변경
+    if os.path.isfile(test_path):
+        test_path = os.path.dirname(test_path)
+
+    # 해당 폴더 안에 바로 mixture.wav가 있는지 확인
+    if os.path.exists(os.path.join(test_path, "mixture.wav")):
+        song_folders = [test_path]
     else:
-        song_folders = [f.path for f in os.scandir(args.test_dir) if f.is_dir()]
+        # 없다면 하위 폴더들을 검색
+        song_folders = [f.path for f in os.scandir(test_path) if f.is_dir()]
     
     print(f"총 {len(song_folders)}개의 곡을 평가합니다.")
-    print(f"옵션 적용: Mask Scale={args.mask_scale}, Threshold={args.threshold}")
     
     sdr_results = []
     
@@ -54,7 +71,12 @@ def evaluate_dataset(args):
             mix_path = os.path.join(song_dir, "mixture.wav")
             target_path = os.path.join(song_dir, f"{args.target}.wav")
             
-            if not os.path.exists(mix_path) or not os.path.exists(target_path):
+            # 정답 파일이 없으면 평가 불가능하므로 스킵
+            if not os.path.exists(mix_path):
+                print(f"⚠️ Mixture 없음: {mix_path}")
+                continue
+            if not os.path.exists(target_path):
+                print(f"⚠️ Target({args.target}) 없음: {target_path} (평가 시 정답 파일 필수)")
                 continue
 
             # 오디오 로드
@@ -72,17 +94,14 @@ def evaluate_dataset(args):
             with torch.no_grad():
                 masks = model(mix_mag_tensor)
                 
-                # --- [전략 2 핵심] 마스크 품질 향상 옵션 적용 ---
-                # 1. Mask Scaling (분리도 강화)
+                # 옵션 적용
                 if args.mask_scale != 1.0:
                     masks = masks ** args.mask_scale
                 
                 masks = masks.squeeze(0).cpu().numpy()
 
-                # 2. Thresholding (노이즈 제거)
                 if args.threshold > 0.0:
                     masks[masks < args.threshold] = 0.0
-                # ---------------------------------------------
 
             stem_indices = {'vocals': 0, 'drums': 1, 'bass': 2, 'other': 3}
             target_idx = stem_indices.get(args.target, 0)
@@ -122,13 +141,16 @@ def evaluate_dataset(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--test_dir', type=str, required=True)
+    parser.add_argument('--test_dir', type=str, required=True, help='Test file or folder path')
     parser.add_argument('--target', type=str, default='vocals')
     parser.add_argument('--model_path', type=str, required=True)
     
-    # [추가됨] 전략 2를 위한 옵션
-    parser.add_argument('--mask_scale', type=float, default=1.0, help='마스크 선명도 조절 (보통 1.2~1.5 추천)')
-    parser.add_argument('--threshold', type=float, default=0.1, help='노이즈 제거 임계값 (보통 0.1~0.2 추천)')
+    # Large 모델 대응 옵션
+    parser.add_argument('--hidden_size', type=int, default=256, help='Hidden size (256/512)')
+    parser.add_argument('--num_layers', type=int, default=3, help='Num layers (3/4)')
+    
+    parser.add_argument('--mask_scale', type=float, default=1.0)
+    parser.add_argument('--threshold', type=float, default=0.1)
     
     args = parser.parse_args()
     evaluate_dataset(args)
