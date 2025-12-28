@@ -20,7 +20,7 @@ def merge_models(path1, path2, save_path):
         if key in state_dict2:
             # 두 모델의 가중치를 5:5로 평균 (0.5, 0.5)
             # 만약 성능이 더 좋은 모델에 비중을 더 주고 싶다면 (0.4, 0.6) 식으로 조절 가능
-            merged_dict[key] = (state_dict1[key] + state_dict2[key]) / 2.0
+            merged_dict[key] = (state_dict1[key] * 0.8) + (state_dict2[key] * 0.2)
         else:
             print(f"⚠️ 경고: {key} 가 두 번째 모델에 없습니다. 첫 번째 모델 값을 사용합니다.")
             merged_dict[key] = state_dict1[key]
@@ -31,8 +31,8 @@ def merge_models(path1, path2, save_path):
 
 if __name__ == "__main__":
     # 파일 경로를 사용자님의 환경에 맞게 수정하세요
-    MODEL_A = "checkpoints/crnn_large_finetune_ver1_20251227_171118_best.pth" # 3.78dB
+    MODEL_A = "checkpoints/crnn_large_ultimate_4db_20251228_195447_best.pth"
     MODEL_B = "checkpoints/crnn_large_final_tune_20251228_063127_best.pth" # 3.93dB
-    OUTPUT = "checkpoints/crnn_large_merged_3.96.pth"
+    OUTPUT = "checkpoints/crnn_large_merged_0.8_0.2.pth"
 
     merge_models(MODEL_A, MODEL_B, OUTPUT)
