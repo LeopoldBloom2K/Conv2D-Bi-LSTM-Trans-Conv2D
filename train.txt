@@ -1,0 +1,1 @@
+python train.py --train_dir "data\train" --val_dir "data\val" --exp_name "crnn_large_final_tune" --hidden_size 512 --num_layers 4 --batch_size 8 --pretrained_path "checkpoints\crnn_large_finetune_ver1_20251227_171118_best.pth" --lr 0.0001

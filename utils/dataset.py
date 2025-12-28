@@ -49,35 +49,24 @@ class RemixingDataset(Dataset):
         return audio
 
     def __getitem__(self, idx):
-        track_path = self.song_folders[idx]
+        # 1. 원본 데이터 로드 (기본 리믹싱 로직 포함)
+        mix, targets = self.load_and_process(idx)
         
-        # 1. 4개 스템 로드 (Vocals, Drums, Bass, Other)
-        stem_names = ['vocals', 'drums', 'bass', 'other']
-        stems = []
-        
-        for name in stem_names:
-            wav_path = os.path.join(track_path, f"{name}.wav")
-            y = self.load_random_chunk(wav_path) # (2, Time)
-            stems.append(y)
+        # 2. 데이터 증강 (Augmentation) 적용 - 학습 모드일 때만
+        if self.remix_prob > 0: # remix_prob가 0보다 크면 학습 모드로 간주
+            # [기법 1] 랜덤 게인 조절 (Volume Scaling)
+            # 보컬과 각 악기들의 볼륨을 0.8배 ~ 1.2배 사이로 무작위 조절
+            for i in range(targets.shape[0]):
+                gain = random.uniform(0.8, 1.2)
+                targets[i] = targets[i] * gain
             
-        # 2. 스택 쌓기 -> (4, 2, Time)
-        sources = np.stack(stems)
-        
-        # 3. 믹스 생성 (모든 소스 합산) -> (2, Time)
-        mix = sources.sum(axis=0) 
-        
-        # 4. STFT 변환 (Processor에서 (2, Freq, Time) 텐서 반환함)
-        mix_mag, _ = self.processor.audio_to_stft(mix)
-        
-        sources_mags = []
-        for i in range(4):
-            mag, _ = self.processor.audio_to_stft(sources[i])
-            sources_mags.append(mag)
-            
-        # Target Shape: (4, 2, Freq, Time)
-        sources_mag = torch.stack(sources_mags)
-        
-        # Return: 
-        # Input: (2, Freq, Time)
-        # Target: (4, 2, Freq, Time)
-        return mix_mag, sources_mag
+            # [기법 2] 채널 뒤집기 (Channel Swap)
+            # 스테레오 왼쪽/오른쪽을 50% 확률로 뒤집음
+            if random.random() > 0.5:
+                mix = torch.flip(mix, [0])
+                targets = torch.flip(targets, [1]) # (Stem, Channel, Freq, Time)
+
+            # 증강된 타겟들로 새로운 Mix 생성
+            mix = torch.sum(targets, dim=0)
+
+        return mix, targets
