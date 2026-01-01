@@ -1,9 +1,11 @@
-
-
 crnn_long_20251225_041902_best.pth / hidden_size 256 num_layers 3 SDR 3.20 dB
+
+crnn_large_finetune_20251226_231234_best / hidden_size 512 num_layers 4 SDR UNKNOWN
 crnn_large_finetune_ver1_20251227_171118_best / hidden_size 512 num_layers 4 SDR 3.7966 dB (1.2, 0.0)
 crnn_large_final_tune_20251228_063127_best / hidden_size 512 num_layers 4 batch_size 8 lr 0.0001 3.9331 dB
 
+
+// section 1. model merging, testing
 두 모델을 합침 <merge_models.py> 평균 SDR: 3.9631 dB crnn_large_merged_3.96.pth
 
 에폭 5를 시도해 두 모델 통합 테스트 진행 
@@ -25,7 +27,7 @@ state_dict1 = crnn_large_final_tune_20251228_063127_best
 state_dict2 = crnn_large_ultimate_4db_20251228_195447_best
 merged_dict = crnn_large_merged_0.8_0.2 // 2.8281 dB (1.1, 0.1)
 
-통과한 모델의 부산물이 작게 내보낼 가능성이 보여 출력 게인 보정 (Output Gain Correction) 수행함
+통과한 모델의 부산물이 작게 내보낼 가능성이 보여 출력 gain 보정 (Output Gain Correction) 수행함
 
 테스트 A (출력 강화): --mask_scale 2.0 --threshold 0.1
 테스트 B (극단적 강화): --mask_scale 3.5 --threshold 0.1
@@ -35,6 +37,26 @@ merged_dict = crnn_large_merged_0.8_0.2 // 2.8281 dB (1.1, 0.1)
 
 gain 3.1 배수에도 큰 차이가 없어 입력 데이터의 규격 (N_FFT, SR)의 문제라고 추정함.
 가중치 블렌딩 재수행하되 merged_dict[key] = (state_dict1[key] * 0.9) + (state_dict2[key] * 0.1) 적용, 내부 변수 모두 상수화함 SR = 22050 N_FFT = 1024 HOP_LENGTH = 256 N_BINS = 512
+
+// section 2. Model Rollback & Retraining Strategy
+
+SDR 점수의 평균이 좋아지지않아 루트 모델로 다시 회귀함. (crnn_large_finetune_20251226_231234_best 이후 finetune 함) <- 데이터의 신호처리 로직을 학습해 과적합 발생함
+dataset.py의 데이터 증강 코드 (random_prob)를 다시 활성화하였고, 재학습 시도함.
+
+gemini.ai 결과 --
+이미지의 그래프는 모델이 학습 데이터에 대해 얼마나 어려워하는지(Loss)를 보여줍니다.
+주황색 선 (맨 아래, ultimate...):
+상태: Loss가 0에 가깝게 급격히 떨어졌습니다.
+의미: 이것은 "과적합(Overfitting)" 혹은 **"암기"**입니다. 데이터 증강(Augmentation) 없이 똑같은 문제만 계속 풀다 보니, 모델이 답을 외워버린 상태입니다. 실전(Test)에서 SDR이 2.0dB로 폭락한 이유가 바로 이 때문입니다.
+노란색/초록색 선 (중간, final_tune...):
+상태: 적당한 Loss를 유지하며 완만하게 떨어지고 있습니다.
+의미: 가장 건강한 상태입니다. (사용자님이 남기라고 한 그 모델입니다.) 이 상태에서 **"데이터 증강"**이라는 새로운 자극을 주어 성능을 끌어올려야 합니다.
+
+재학습 전략 -- 
+1. 매 에폭마다 새로운 조합의 학습 발생 (dataset.py 증강코드 복원)
+2. 이전 3.98 dB를 기록한 모델을 가져와 다시 학습함 (pretrained), lr 조정 (0.0001), --batch_size 8 or 16 (기존 8), --argumentation 강도 (remix_prob = 0.5)
+3. target stem 되어진 data 외에 모두 silence 처리하여 반주 학습 (보컬 무음)으로 보컬의 선명도를 증가하게함.
+
 
 python train.py ^
     --train_dir "data\train" ^
@@ -72,3 +94,15 @@ python evaluate.py ^
     --num_layers 4 ^
     --gain 2.1 ^
     --threshold 0.05
+
+
+    python train.py ^
+    --train_dir "data\train" ^
+    --val_dir "data\val" ^
+    --exp_name "Retrain_with_Augmentation" ^
+    --hidden_size 512 ^
+    --num_layers 4 ^
+    --batch_size 8 ^
+    --lr 0.0001 ^
+    --pretrained_path "checkpoints\crnn_large_final_tune_20251228_063127_best.pth" ^
+    --epochs 200
