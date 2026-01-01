@@ -3,12 +3,11 @@ import numpy as np
 import torch
 
 class AudioProcessor:
-    def __init__(self, sr=44100, n_fft=2048, hop_length=512):
+    def __init__(self, sr=22050, n_fft=1024, hop_length=256):
         self.sr = sr
         self.n_fft = n_fft
         self.hop_length = hop_length
-        # 모델 입력 크기를 맞추기 위해 주파수 빈을 1024로 자름
-        self.n_bins = n_fft // 2 
+        self.n_bins = n_fft // 2 # 512
 
     def load_audio(self, path, duration=None): # [수정] duration 인자 추가
         """

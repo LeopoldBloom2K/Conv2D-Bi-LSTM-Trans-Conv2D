@@ -1,3 +1,41 @@
+
+
+crnn_long_20251225_041902_best.pth / hidden_size 256 num_layers 3 SDR 3.20 dB
+crnn_large_finetune_ver1_20251227_171118_best / hidden_size 512 num_layers 4 SDR 3.7966 dB (1.2, 0.0)
+crnn_large_final_tune_20251228_063127_best / hidden_size 512 num_layers 4 batch_size 8 lr 0.0001 3.9331 dB
+
+두 모델을 합침 <merge_models.py> 평균 SDR: 3.9631 dB crnn_large_merged_3.96.pth
+
+에폭 5를 시도해 두 모델 통합 테스트 진행 
+
+crnn_large_ultimate_4db_20251228_195447_best.pth / hidden_size 512 num_layers 4 batch_size 8 lr 0.00005 crnn_large_merged_3.96.pth 2.0048 dB
+
+위 모델의 기능이 온전히 발현되지않아 다음과 같은 시도를 함 
+- 소프트 마스트 --mask_scale 0.8 2.2692
+- 노이즈 허용 --threshold 0.05 1.5643
+- 강력한 압착 --mask_scale 1.5
+
+전과 다른 양상을 띄지 않아 random_prob를 비활성화 후 낮은 에폭으로 시도함
+
+crnn_large_final_fix_20251228_233017_best / hidden_size 512 num_layers 4 batch_size 8 lr 0.00001 epochs 5 crnn_large_ultimate_4db_20251228_195447_best.pth 2.0953 dB
+
+가중치 블렌딩 (Weight Blending) 으로 3.93dB와 merge한 모델을 블렌딩함 
+merged_dict[key] = (state_dict1[key] * 0.8) + (state_dict2[key] * 0.2)
+state_dict1 = crnn_large_final_tune_20251228_063127_best
+state_dict2 = crnn_large_ultimate_4db_20251228_195447_best
+merged_dict = crnn_large_merged_0.8_0.2 // 2.8281 dB (1.1, 0.1)
+
+통과한 모델의 부산물이 작게 내보낼 가능성이 보여 출력 게인 보정 (Output Gain Correction) 수행함
+
+테스트 A (출력 강화): --mask_scale 2.0 --threshold 0.1
+테스트 B (극단적 강화): --mask_scale 3.5 --threshold 0.1
+테스트 C (반대로 축소): --mask_scale 0.5 --threshold 0.1
+
+수행 전 자동으로 gain 값 자동 추적 코드를 수행함. // Gain Correction: x3.1 평균 SDR: 2.2213 dB
+
+gain 3.1 배수에도 큰 차이가 없어 입력 데이터의 규격 (N_FFT, SR)의 문제라고 추정함.
+가중치 블렌딩 재수행하되 merged_dict[key] = (state_dict1[key] * 0.9) + (state_dict2[key] * 0.1) 적용, 내부 변수 모두 상수화함 SR = 22050 N_FFT = 1024 HOP_LENGTH = 256 N_BINS = 512
+
 python train.py ^
     --train_dir "data\train" ^
     --val_dir "data\val" ^
@@ -21,8 +59,16 @@ python train.py ^
 
 python evaluate.py ^
     --test_dir "data\val" ^
-    --model_path "checkpoints\crnn_large_merged_0.8_0.2.pth" ^
+    --model_path "checkpoints\crnn_large_merged_0.9_0.1.pth" ^
     --hidden_size 512 ^
     --num_layers 4 ^
-    --mask_scale 1.1 ^
+    --mask_scale 1.0 ^
     --threshold 0.1
+
+python evaluate.py ^
+    --test_dir "data\val" ^
+    --model_path "checkpoints\crnn_large_merged_0.9_0.1.pth" ^
+    --hidden_size 512 ^
+    --num_layers 4 ^
+    --gain 2.1 ^
+    --threshold 0.05

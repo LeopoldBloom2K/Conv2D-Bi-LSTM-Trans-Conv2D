@@ -33,6 +33,6 @@ if __name__ == "__main__":
     # 파일 경로를 사용자님의 환경에 맞게 수정하세요
     MODEL_A = "checkpoints/crnn_large_ultimate_4db_20251228_195447_best.pth"
     MODEL_B = "checkpoints/crnn_large_final_tune_20251228_063127_best.pth" # 3.93dB
-    OUTPUT = "checkpoints/crnn_large_merged_0.8_0.2.pth"
+    OUTPUT = "checkpoints/crnn_large_merged_0.9_0.1.pth"
 
     merge_models(MODEL_A, MODEL_B, OUTPUT)

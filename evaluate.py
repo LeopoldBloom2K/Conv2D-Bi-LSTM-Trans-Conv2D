@@ -19,10 +19,10 @@ def evaluate_dataset(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"🚀 Evaluation Device: {device}")
     
-    SR = 44100  # AudioProcessor 설정에 맞춰 44100으로 변경 권장
-    N_FFT = 2048
-    HOP_LENGTH = 512
-    N_BINS = N_FFT // 2 
+    SR = 22050
+    N_FFT = 1024
+    HOP_LENGTH = 256
+    N_BINS = 512
     
     print(f"Loading model from {args.model_path}...")
     print(f"⚙️ Model Config: Hidden={args.hidden_size}, Layers={args.num_layers}")
