@@ -70,13 +70,19 @@ def main():
     processor = AudioProcessor(sr=args.sr, n_fft=args.n_fft, hop_length=args.hop_length)
     
     # ---------------------------------------------------------
+    # [수정] 데이터셋 로드 시 '학습할 악기 순서'를 명확히 고정
+    # 이 순서는 모델의 출력 채널 순서(0:Vocals, 1:Drums...)와 일치해야 합니다.
+    # ---------------------------------------------------------
+    TARGET_STEMS = ['vocals', 'drums', 'bass', 'other']
+    print(f"🎯 학습 타겟 순서 고정: {TARGET_STEMS}")
+
+    # ---------------------------------------------------------
     # 1. 데이터셋 구성 (여러 데이터셋 병합)
     # ---------------------------------------------------------
     # 예: --train_dir에 "data/musdb18,data/moises,data/slakh" 처럼 콤마로 구분해서 넣거나
     # 아래 리스트에 직접 경로를 추가하세요.
     
     # [사용자 수정 영역] 사용할 데이터셋 경로 리스트
-    # args.train_dir가 콤마(,)로 구분되어 들어온다고 가정하거나 리스트 직접 작성
     if ',' in args.train_dir:
         train_dirs = args.train_dir.split(',')
     else:
@@ -91,8 +97,14 @@ def main():
         d_path = d_path.strip()
         if os.path.exists(d_path):
             print(f"   -> 추가: {d_path}")
-            # Moises/Slakh 등 데이터 양이 많으므로 remix_prob를 0.5~0.8로 적극 활용 추천
-            ds = RemixingDataset(d_path, processor, duration=3.0, remix_prob=0.5) 
+            # [수정] target_stems 인자 추가하여 악기 순서 고정
+            ds = RemixingDataset(
+                d_path, 
+                processor, 
+                duration=3.0, 
+                remix_prob=0.5,
+                target_stems=TARGET_STEMS
+            ) 
             train_datasets.append(ds)
         else:
             print(f"   ⚠️ 경고: 경로를 찾을 수 없음 - {d_path}")
@@ -103,8 +115,14 @@ def main():
     # 데이터셋 병합 (ConcatDataset)
     combined_train_dataset = ConcatDataset(train_datasets)
     
-    # 검증 데이터셋 (기존 유지)
-    val_dataset = RemixingDataset(args.val_dir, processor, duration=3.0, remix_prob=0.0)
+    # [수정] 검증 데이터셋에도 target_stems 적용
+    val_dataset = RemixingDataset(
+        args.val_dir, 
+        processor, 
+        duration=3.0, 
+        remix_prob=0.0,
+        target_stems=TARGET_STEMS
+    )
     
     train_loader = DataLoader(
         combined_train_dataset, batch_size=args.batch_size, shuffle=True, 
@@ -118,12 +136,12 @@ def main():
     print(f"📊 총 학습 샘플 수: {len(combined_train_dataset)}")
     
     # ---------------------------------------------------------
-    # 2. 모델 초기화 (4-Stem 타겟)
+    # 2. 모델 초기화 (4-Stem 타겟 - 하드코딩 유지)
     # ---------------------------------------------------------
     model = CRNN_Separator(
         input_channels=2, 
         n_bins=args.n_fft // 2, 
-        num_stems=4,          # [중요] Demucs 대체용이므로 4로 고정
+        num_stems=4,          # [요청사항 반영] 4-stem 하드코딩 유지 (Silence 처리용)
         hidden_size=args.hidden_size, 
         num_layers=args.num_layers
     ).to(device)
@@ -144,6 +162,7 @@ def main():
     # ---------------------------------------------------------
     # 4. 학습 시작
     # ---------------------------------------------------------
+    # [참고] Layer Freezing은 현재 적용하지 않음 (SDR 평가 후 진행 예정)
     trainer = Trainer(model, train_loader, val_loader, args)
     trainer.fit()
 

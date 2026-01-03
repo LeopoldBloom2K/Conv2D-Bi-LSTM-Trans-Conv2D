@@ -57,6 +57,14 @@ gemini.ai 결과 --
 2. 이전 3.98 dB를 기록한 모델을 가져와 다시 학습함 (pretrained), lr 조정 (0.0001), --batch_size 8 or 16 (기존 8), --argumentation 강도 (remix_prob = 0.5)
 3. target stem 되어진 data 외에 모두 silence 처리하여 반주 학습 (보컬 무음)으로 보컬의 선명도를 증가하게함.
 
+결과 -- 
+inference.py 로 결과물을 실제로 접한 결과, 모든 stem 되어진 음원들이 노이즈가 섞이거나 소리가 매우 작아 SDR 점수를 매길 필요 없이 폐기처분이 확실시 됨.
+모델 (crnn_large_final_tune_20251228_063127_best) 폐기
+
+section 3. 이전 모델 호출 및 stem 객체 명시 후 재학습 시도
+1. train.py 에서 학습(train) / 검증 (val) 데이터셋 접근시 target_stem 인지를 활용해 오인학습하지 않도록 호출부를 수정함.
+2. layer_freezing 기능을 도입해 기존 레이어를 얼리고 출력 레이어만 학습하여 취약한 부분에 초점을 맞출 예정. 1번 방법 무효할 시 시도함. 
+
 
 python train.py ^
     --train_dir "data\train" ^
@@ -96,7 +104,7 @@ python evaluate.py ^
     --threshold 0.05
 
 
-    python train.py ^
+python train.py ^
     --train_dir "data\train" ^
     --val_dir "data\val" ^
     --exp_name "Retrain_with_Augmentation" ^
