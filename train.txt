@@ -65,6 +65,23 @@ section 3. 이전 모델 호출 및 stem 객체 명시 후 재학습 시도
 1. train.py 에서 학습(train) / 검증 (val) 데이터셋 접근시 target_stem 인지를 활용해 오인학습하지 않도록 호출부를 수정함.
 2. layer_freezing 기능을 도입해 기존 레이어를 얼리고 출력 레이어만 학습하여 취약한 부분에 초점을 맞출 예정. 1번 방법 무효할 시 시도함. 
 
+결과 -- 
+학습 완료된 모델 SDR 측정 결과 음수대로 나와서 원본 모델의 SDR 점수를 다시 측정, 3.78 dB의 기존 점수를 보여 학습이 잘못된 것으로 추정함.
+
+dataset 에서 오인학습을 방지하기 위한 호출부 부분에서 stem 인덱스 (bass, drums, other, vocals)에 해당하지않는 데이터 예외값을 if-else 값을 수정함. (train.py 실행 시 존재하지 않는 파일을 출력함.)
+
+조치 후 결과 --
+SDR 점수가 음수로 측정되어 데이터가 제대로 로드되었는지 확인함 (check_data), 
+데이터 중 일부가 numpy array를 필요로 해 로드 실패가 일어남 형변환 로직 추가
+안전 로딩 이슈로 인해 fake_stereo 기능을 넣어 데이터 전처리 예외 처리함 
+차원을 짝수로 통일하기 위해 1개를 버힘 513 -> 512
+
+eval_result_vocals에서 대부분의 음원 SDR 점수가 음수로 나타남
+데이터의 입력규격 오류와 기존 학습과의 차이를 확인함
+
+데이터를 모델에 넣기 전부터 log로 변환 후 입력 np.abs(librosa.stft(...)) -> mag_numpy = np.log1p(mag_numpy)
+
+
 
 python train.py ^
     --train_dir "data\train" ^
@@ -89,7 +106,7 @@ python train.py ^
 
 python evaluate.py ^
     --test_dir "data\val" ^
-    --model_path "checkpoints\crnn_large_merged_0.9_0.1.pth" ^
+    --model_path "checkpoints\Finetune_crnn_large_retrain_augmentation_20260105_161753_best.pth" ^
     --hidden_size 512 ^
     --num_layers 4 ^
     --mask_scale 1.0 ^
@@ -112,5 +129,5 @@ python train.py ^
     --num_layers 4 ^
     --batch_size 8 ^
     --lr 0.0001 ^
-    --pretrained_path "checkpoints\crnn_large_final_tune_20251228_063127_best.pth" ^
+    --pretrained_path "checkpoints\crnn_large_finetune_ver1_20251227_171118_best.pth" ^
     --epochs 200
