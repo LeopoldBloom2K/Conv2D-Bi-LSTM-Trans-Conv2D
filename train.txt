@@ -106,19 +106,18 @@ python train.py ^
 
 python evaluate.py ^
     --test_dir "data\val" ^
-    --model_path "checkpoints\Finetune_crnn_large_retrain_augmentation_20260105_161753_best.pth" ^
+    --model_path "checkpoints\Finetune_crnn_large_retrain_augmentation_20260105_192501_best.pth" ^
     --hidden_size 512 ^
     --num_layers 4 ^
     --mask_scale 1.0 ^
-    --threshold 0.1
+    --threshold 0.0
 
 python evaluate.py ^
     --test_dir "data\val" ^
-    --model_path "checkpoints\crnn_large_merged_0.9_0.1.pth" ^
+    --model_path "checkpoints\Finetune_Retrain_with_Augmentation_20260105_221820_best.pth" ^
     --hidden_size 512 ^
     --num_layers 4 ^
-    --gain 2.1 ^
-    --threshold 0.05
+
 
 
 python train.py ^

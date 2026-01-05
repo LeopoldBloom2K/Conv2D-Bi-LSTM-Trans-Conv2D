@@ -31,7 +31,7 @@ class RemixingDataset(Dataset):
     def load_and_process(self, idx):
         song_dir = self.song_dirs[idx]
         
-        # 1. Measure length for random section
+        # 1. 랜덤 구간 설정
         check_file = os.path.join(song_dir, f"{self.target_stems[0]}.wav")
         if not os.path.exists(check_file):
              check_file = os.path.join(song_dir, "mixture.wav")
@@ -45,7 +45,7 @@ class RemixingDataset(Dataset):
         except Exception:
             start_offset = 0.0
 
-        # 2. Load stems and STFT
+        # 2. 스템 로드 및 STFT
         ref_shape = None
         final_stems = []
 
@@ -67,13 +67,14 @@ class RemixingDataset(Dataset):
                     mag_numpy = np.abs(spec)
 
                     # -----------------------------------------------------------
-                    # [CRITICAL FIX] Log Transformation (Linear -> Log Scale)
-                    # Compresses large linear amplitude values to prevent model explosion.
+                    # ✅ [Correct Fix] Log1p만 유지하고 정규화는 제거
+                    # 평가 코드(audio_processor)와 스케일을 일치시킵니다.
                     # -----------------------------------------------------------
                     mag_numpy = np.log1p(mag_numpy)
                     
-                    # [CRITICAL FIX 1] Slice 513 -> 512 (Remove Nyquist Bin)
-                    # Matches model config (n_bins = n_fft // 2)
+                    # (정규화 코드 제거됨)
+                    
+                    # Slice 513 -> 512
                     if mag_numpy.shape[0] == (self.n_fft // 2) + 1:
                         mag_numpy = mag_numpy[:-1, :]
                     
@@ -94,12 +95,11 @@ class RemixingDataset(Dataset):
             
             final_stems.append(mag)
 
-        # 3. Data Packaging
+        # 3. 데이터 패키징
         processed_stems = []
         
-        # [CRITICAL FIX 2] Set reference shape to 512 bins
         if ref_shape is None:
-             n_bins = self.n_fft // 2  # +1 removed (512)
+             n_bins = self.n_fft // 2 
              n_frames = int(self.sr * self.duration / self.hop_length) + 1
              ref_shape = (2, n_bins, n_frames)
 
