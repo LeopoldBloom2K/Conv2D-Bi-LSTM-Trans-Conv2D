@@ -91,6 +91,21 @@ eval_result_vocals에서 대부분의 음원 SDR 점수가 음수로 나타남
 이를 U-Net 구조로 보완하여 원본의 디테일을 참고하여 재배열함.
 standard CRNN -> U-net CRNN
 
+(수정 26.01.15) 
+
+직전 수정본은 단순히 해당 음원에서 BPM 의 위치를 원본 음원과 비교하여 위치 정보를 참고해 다시 재배열하는 U-net 구조를 계획했지만, 
+장르의 다양성에 대한 BPM 혼동할 수 있었고, 
+loss 값 측정시 오답일 경우 즉시 정답이 아님으로 학습되어 직전 모델에서 무음으로 판별된 사례와 연결이 됨,
+또한 hidden_size를 512 -> 0/1 으로 바로 압축하여 손실이 매우 컸음,
+
+(최종 수정 정리)
+| 구분 | 기존 모델 (Current) | 추천 모델 (Multi-Task U-Net) |
+| 핵심 구조 | Encoder → LSTM → Decoder | Encoder → LSTM → [Decoder] + [Rhythm Head] |
+| 분석 | 악기별 | 악기별 & 박자별 |
+| Rhythm Head | 없음 | Linear → LayerNorm → Dropout(0.4) → Linear (깔때기 구조) |
+| 규격 | Hidden 512 / Layer 4 | Hidden 512 / Layer 4 (기존 규격 유지) |
+| loss | BCE loss | Focal loss |
+| optimizer (weight decay) | Adam (1e-5) | AdamW (1e-3) |
 
 
 python train.py ^
